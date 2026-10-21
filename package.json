@@ -7,6 +7,14 @@
     "node": ">=22"
   },
   "scripts": {
+    "build": "tsc -p apps/api/tsconfig.json",
     "start": "node apps/api/dist/index.js"
+  },
+  "dependencies": {
+    "fastify": "^5.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.1",
+    "typescript": "^5.9.3"
   }
 }
