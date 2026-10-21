@@ -1,0 +1,12 @@
+{
+  "name": "poster-meteor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node apps/api/dist/index.js"
+  }
+}

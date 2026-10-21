@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: poster
+      POSTGRES_PASSWORD: poster
+      POSTGRES_DB: poster_meteor
+    command: ["postgres", "-c", "max_connections=60"]
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poster -d poster_meteor"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://poster:poster@postgres:5432/poster_meteor
+      POOL_MAX: "8"
+      PACK: poster-meteor
+      GIT_SHA: ${GIT_SHA:-unknown}
+    depends_on:
+      postgres:
+        condition: service_healthy
