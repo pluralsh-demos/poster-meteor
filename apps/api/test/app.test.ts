@@ -2,6 +2,7 @@ import { Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import type { OrderDb, OrderQueryResult } from "../src/orders.js";
 
 const METRIC_NAMES = [
   "http_requests_total",
@@ -172,4 +173,296 @@ describe("poster meteor api", () => {
       expect(line.ref).toBe("");
     }
   });
+
+  it("returns 503 for orders when no database is configured", async () => {
+    app = buildApp({ logStream: discardLogs });
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody({ payment: { brand: "visa", last4: "4242424242424242" } }),
+    });
+    const loaded = await app.inject({ method: "GET", url: "/api/orders/PM-12000" });
+    const catalog = await app.inject({ method: "GET", url: "/api/products" });
+
+    expect(created.statusCode).toBe(503);
+    expect(loaded.statusCode).toBe(503);
+    expect(created.json()).toEqual({ error: "Orders are unavailable" });
+    expect(catalog.statusCode).toBe(200);
+    expect(await counter(app, "transactions_total", 'result="success"')).toBe(0);
+    expect(await counter(app, "transactions_total", 'result="error"')).toBe(0);
+  });
+
+  it("places an order and reads it back", async () => {
+    const logs = captureLogs();
+    const db = memoryOrders();
+    app = buildApp({ logStream: logs.stream, pool: db.pool });
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody({
+        payment: { brand: "visa", last4: "4242424242424242" },
+        items: [
+          { sku: "PM-PERSEID", size: "A3", frame: "none", quantity: 2 },
+          { sku: "PM-STARMAP", size: "A1", frame: "white-ash", customText: "Orion", quantity: 1 },
+        ],
+      }),
+    });
+
+    expect(created.statusCode).toBe(201);
+    const order = created.json<{
+      number: string;
+      status: string;
+      subtotal: number;
+      total: number;
+      tax?: number;
+      items: { sku: string; unitPrice: number; customText: string | null }[];
+    }>();
+    expect(order.number).toMatch(/^PM-\d+$/);
+    expect(order.status).toBe("received");
+    expect(order.subtotal).toBe(order.total);
+    expect(order.subtotal).toBe(2800 * 2 + (6400 + 3500));
+    expect(order.items).toHaveLength(3);
+    expect(order.items[0]).toMatchObject({ sku: "PM-PERSEID", unitPrice: 2800, customText: null });
+    expect(order.items[2]).toMatchObject({ sku: "PM-STARMAP", unitPrice: 9900, customText: "Orion" });
+    expect(order).not.toHaveProperty("tax");
+    expect(created.body).not.toContain("4242424242424242");
+    expect(logs.text()).not.toContain("4242424242424242");
+    expect(db.calls.some((sql) => sql.includes("4242"))).toBe(false);
+    expect(await counter(app, "transactions_total", 'result="success"')).toBe(1);
+    expect(await counter(app, "transactions_total", 'result="error"')).toBe(0);
+
+    const createdLog = logLines(logs.text()).find((line) => line.msg === "order created");
+    expect(createdLog?.ref).toBe(order.number);
+
+    const loaded = await app.inject({ method: "GET", url: `/api/orders/${order.number}` });
+    expect(loaded.statusCode).toBe(200);
+    expect(loaded.json()).toEqual(order);
+    expect(logLines(logs.text()).some((line) => line.ref === order.number && line.route === "/api/orders/:number")).toBe(
+      true,
+    );
+  });
+
+  it("rejects an unknown sku without counting a transaction", async () => {
+    const db = memoryOrders();
+    app = buildApp({ logStream: discardLogs, pool: db.pool });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody({
+        items: [{ sku: "PM-NOPE", size: "A3", frame: "none", quantity: 1 }],
+      }),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(db.calls).toEqual([]);
+    expect(await counter(app, "transactions_total", 'result="success"')).toBe(0);
+    expect(await counter(app, "transactions_total", 'result="error"')).toBe(0);
+
+    const customOnPlain = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody({
+        items: [{ sku: "PM-PERSEID", size: "A3", frame: "none", quantity: 1, customText: "nope" }],
+      }),
+    });
+    const missingCustom = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody({
+        items: [{ sku: "PM-NAMESTARS", size: "A2", frame: "black-oak", quantity: 1 }],
+      }),
+    });
+    const longCustom = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody({
+        items: [
+          {
+            sku: "PM-STARMAP",
+            size: "A3",
+            frame: "none",
+            quantity: 1,
+            customText: "x".repeat(61),
+          },
+        ],
+      }),
+    });
+    const tooMany = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody({
+        items: [{ sku: "PM-HALLEY", size: "A3", frame: "none", quantity: 11 }],
+      }),
+    });
+
+    expect(customOnPlain.statusCode).toBe(400);
+    expect(missingCustom.statusCode).toBe(400);
+    expect(longCustom.statusCode).toBe(400);
+    expect(tooMany.statusCode).toBe(400);
+    expect(db.calls).toEqual([]);
+    expect(await counter(app, "transactions_total", 'result="error"')).toBe(0);
+  });
+
+  it("counts a missing column as a database error and hides the sql", async () => {
+    const logs = captureLogs();
+    const db = memoryOrders({
+      failOn: "INSERT INTO orders",
+      code: "42703",
+      message: 'column "print_dimensions" of relation "orders" does not exist',
+    });
+    app = buildApp({ logStream: logs.stream, pool: db.pool });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/orders",
+      payload: orderBody(),
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ error: "We couldn't place your order" });
+    expect(response.body).not.toContain("42703");
+    expect(response.body).not.toContain("print_dimensions");
+    expect(await counter(app, "db_errors_total", 'sqlstate="42703"')).toBe(1);
+    expect(await counter(app, "transactions_total", 'result="error"')).toBe(1);
+    expect(await counter(app, "transactions_total", 'result="success"')).toBe(0);
+
+    const text = logs.text();
+    expect(text).toContain("42703");
+    expect(text).toContain("sqlstate");
+    const dbError = logLines(text).find((line) => line.sqlstate === "42703");
+    expect(dbError?.pgMessage).toBe(
+      'column "print_dimensions" of relation "orders" does not exist',
+    );
+    expect(db.calls.some((sql) => sql === "ROLLBACK")).toBe(true);
+  });
 });
+
+function orderBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    email: "ada@example.com",
+    shipTo: {
+      name: "Ada Lovelace",
+      line1: "1 Analytical Engine",
+      city: "London",
+      region: "London",
+      postalCode: "SW1A 1AA",
+      country: "GB",
+    },
+    items: [{ sku: "PM-PERSEID", size: "A3", frame: "none", quantity: 1 }],
+    payment: { brand: "visa", last4: "4242" },
+    ...overrides,
+  };
+}
+
+function logLines(text: string): Record<string, unknown>[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+async function counter(app: FastifyInstance, name: string, labels: string): Promise<number> {
+  const response = await app.inject({ method: "GET", url: "/metrics" });
+  const match = response.body.match(new RegExp(`^${name}\\{${labels}\\} (\\d+)`, "m"));
+  return match?.[1] ? Number(match[1]) : 0;
+}
+
+type StoredItem = {
+  sku: string;
+  size: string;
+  frame: string;
+  customText: string | null;
+  unitPrice: number;
+};
+
+type StoredOrder = {
+  id: string;
+  number: string;
+  status: "received";
+  subtotal: number;
+  total: number;
+  items: StoredItem[];
+};
+
+function memoryOrders(options?: { failOn?: string; code?: string; message?: string }): {
+  pool: OrderDb;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const orders: StoredOrder[] = [];
+  let next = 12000;
+  const client = {
+    async query<T>(sql: string, params?: unknown[]): Promise<OrderQueryResult<T>> {
+      calls.push(sql);
+      if (options?.failOn && sql.includes(options.failOn)) {
+        const error = new Error(options.message ?? "database error") as Error & { code?: string };
+        error.code = options.code ?? "XX000";
+        throw error;
+      }
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+        return { rows: [], rowCount: null };
+      }
+      if (sql.includes("INSERT INTO orders")) {
+        const subtotal = Number(params?.[2]);
+        const id = `order-${orders.length + 1}`;
+        const number = `PM-${next}`;
+        next += 1;
+        orders.push({
+          id,
+          number,
+          status: "received",
+          subtotal,
+          total: subtotal,
+          items: [],
+        });
+        return {
+          rows: [{ id, number, status: "received", subtotal, total: subtotal } as T],
+          rowCount: 1,
+        };
+      }
+      if (sql.includes("INSERT INTO order_items")) {
+        const order = orders.find((entry) => entry.id === params?.[0]);
+        if (!order) throw new Error("missing order");
+        order.items.push({
+          sku: String(params?.[1]),
+          size: String(params?.[2]),
+          frame: String(params?.[3]),
+          customText: params?.[4] === null || params?.[4] === undefined ? null : String(params[4]),
+          unitPrice: Number(params?.[5]),
+        });
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes("FROM orders")) {
+        const order = orders.find((entry) => entry.number === params?.[0]);
+        if (!order) return { rows: [], rowCount: 0 };
+        return {
+          rows: [
+            {
+              number: order.number,
+              status: order.status,
+              subtotal: order.subtotal,
+              total: order.total,
+              items: order.items,
+            } as T,
+          ],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`unexpected sql: ${sql}`);
+    },
+    release() {},
+  };
+  return {
+    calls,
+    pool: {
+      totalCount: 0,
+      idleCount: 0,
+      waitingCount: 0,
+      connect: async () => client,
+    },
+  };
+}
