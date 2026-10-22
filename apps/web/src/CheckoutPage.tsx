@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError, createOrder, type CreateOrderRequest } from "./api";
-import { CART_STORAGE_KEY, checkoutLines, type CartLine } from "./cart";
+import { checkoutLines, clearCart, type CartLine } from "./cart";
 import {
   fallbackCatalog,
   isCatalog,
@@ -153,7 +153,7 @@ export function CheckoutPage() {
     setSubmitting(true);
     try {
       const order = await createOrder(payload);
-      localStorage.removeItem(CART_STORAGE_KEY);
+      clearCart();
       navigate(`/orders/${order.number}`);
     } catch (cause) {
       const message = cause instanceof ApiError ? cause.message : "We couldn't place your order";

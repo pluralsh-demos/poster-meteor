@@ -33,10 +33,34 @@ select {
   background: #faf7f2;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
 .brand {
   font-family: Georgia, "Iowan Old Style", serif;
   font-size: 1.35rem;
   letter-spacing: 0.01em;
+  color: inherit;
+  text-decoration: none;
+}
+
+.cart-link {
+  color: inherit;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand:focus-visible,
+.cart-link:focus-visible,
+.catalog-card:focus-visible,
+.choice:focus-within {
+  outline: 2px solid #8c3a2f;
+  outline-offset: 3px;
 }
 
 .demo-label {
@@ -225,12 +249,218 @@ select {
   margin-top: 1.25rem;
 }
 
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
+  gap: 1rem;
+}
+
+.catalog-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #faf7f2;
+  border: 1px solid #e2d9cc;
+  color: inherit;
+  text-decoration: none;
+}
+
+.catalog-card h2 {
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.card-price {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 0;
+}
+
+.poster-stage {
+  display: grid;
+  place-items: center;
+  width: min(100%, 28rem);
+  margin: 0 auto;
+  padding: 1rem;
+  background: #ebe4da;
+}
+
+.poster {
+  position: relative;
+  width: 58%;
+  aspect-ratio: 1 / 1.41421356237;
+  background: #111;
+  box-shadow: 0 12px 28px rgba(28, 25, 21, 0.16);
+  transition: width 160ms ease;
+}
+
+.poster.size-A2 {
+  width: 74%;
+}
+
+.poster.size-A1,
+.poster.fill {
+  width: 86%;
+}
+
+.poster svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.poster.frame-none {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.poster.frame-black-oak {
+  border: 12px solid #241910;
+}
+
+.poster.frame-white-ash {
+  border: 12px solid #f7f3ec;
+  box-shadow: 0 0 0 1px #cfc4b4, 0 12px 28px rgba(28, 25, 21, 0.16);
+}
+
+.poster-custom {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 7%;
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-size: 0.92rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.poster.ink-light .poster-custom {
+  color: #f6f1e7;
+}
+
+.poster.ink-dark .poster-custom {
+  color: #1c1915;
+}
+
+.product-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(16rem, 0.85fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.choice-set {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice-set legend {
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.choice {
+  position: relative;
+  display: grid;
+  gap: 0.1rem;
+  min-width: 5.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #c9bfb2;
+  background: white;
+  cursor: pointer;
+}
+
+.choice input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  appearance: none;
+  cursor: pointer;
+}
+
+.choice:has(input:checked) {
+  border-color: #1c1915;
+  background: #1c1915;
+  color: #faf7f2;
+}
+
+.choice .fine {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.notice {
+  margin: 0;
+}
+
+.notice a {
+  color: inherit;
+}
+
+.cart-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem auto;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e2d9cc;
+}
+
+.cart-line:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.cart-line h3 {
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.cart-line .fine,
+.cart-text {
+  margin: 0.15rem 0 0;
+}
+
+.cart-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.text-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8c3a2f;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 @media (max-width: 800px) {
   .layout,
   .line-grid,
   .address-grid,
-  .payment-grid {
+  .payment-grid,
+  .product-layout,
+  .cart-line {
     grid-template-columns: 1fr;
+  }
+
+  .cart-actions {
+    justify-items: start;
   }
 
   .summary {
