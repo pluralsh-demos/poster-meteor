@@ -1,0 +1,26 @@
+pack:
+  hostnamePrefix: poster-meteor
+
+api:
+  image:
+    tag: dev
+  replicaCount: 3
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 6
+  db:
+    poolMax: 8
+
+worker:
+  image:
+    tag: dev
+  replicaCount: 2
+  db:
+    poolMax: 4
+  queues:
+    render:
+      concurrency: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
