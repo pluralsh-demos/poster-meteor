@@ -1,0 +1,239 @@
+:root {
+  color: #1c1915;
+  background: #f3eee6;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #d9d0c3;
+  background: #faf7f2;
+}
+
+.brand {
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
+}
+
+.demo-label {
+  display: inline-block;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border: 2px solid #8c3a2f;
+  color: #8c3a2f;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.page {
+  width: min(1080px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.5rem 0 3rem;
+}
+
+.page h1 {
+  margin: 0 0 0.35rem;
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.lede {
+  margin: 0 0 1.5rem;
+  color: #5c564c;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 0.8fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.layout > * {
+  min-width: 0;
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.panel {
+  padding: 1rem 1.1rem 1.15rem;
+  background: #faf7f2;
+  border: 1px solid #e2d9cc;
+}
+
+.panel h2 {
+  margin: 0 0 0.8rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fields {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.field span {
+  font-size: 0.85rem;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #c9bfb2;
+  background: white;
+  color: inherit;
+}
+
+.line-grid,
+.address-grid,
+.payment-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.line-grid {
+  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 0.7fr));
+}
+
+.address-grid,
+.payment-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.line + .line {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2d9cc;
+}
+
+.custom-text {
+  margin-top: 0.75rem;
+}
+
+.summary {
+  position: sticky;
+  top: 1rem;
+}
+
+.summary-line,
+.total-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.summary-line {
+  margin: 0 0 0.55rem;
+}
+
+.total-line {
+  margin: 0.8rem 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid #e2d9cc;
+  font-size: 1.15rem;
+}
+
+.fine {
+  margin: 0;
+  color: #5c564c;
+  font-size: 0.85rem;
+}
+
+.place-order,
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.7rem 1rem;
+  border: 0;
+  background: #1c1915;
+  color: #faf7f2;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.place-order:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.alert {
+  margin: 0.8rem 0 0;
+  color: #8c3a2f;
+}
+
+.order-number {
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+}
+
+.status-line {
+  margin: 0.4rem 0 1.25rem;
+  font-size: 1.1rem;
+}
+
+.status-line strong {
+  text-transform: lowercase;
+}
+
+.back-link {
+  width: auto;
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 800px) {
+  .layout,
+  .line-grid,
+  .address-grid,
+  .payment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary {
+    position: static;
+  }
+}
