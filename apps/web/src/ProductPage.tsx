@@ -6,6 +6,7 @@ import { MAX_QUANTITY, MIN_QUANTITY, sameCartConfiguration } from "./cart";
 import { unitPriceCents, type CatalogProductDetail } from "./catalog";
 import { formatCents } from "./format";
 import { PosterPreview } from "./PosterPreview";
+import { frameSwatchUrl } from "./posters";
 
 const CUSTOM_TEXT_MAX = 60;
 
@@ -158,22 +159,26 @@ export function ProductPage() {
           <fieldset className="choice-set">
             <legend>Frame</legend>
             <div className="choices">
-              {product.frames.map((entry) => (
-                <label key={entry.id} className="choice">
-                  <input
-                    type="radio"
-                    name="frame"
-                    value={entry.id}
-                    checked={frame === entry.id}
-                    onChange={() => {
-                      setFrame(entry.id);
-                      clearMessages();
-                    }}
-                  />
-                  <span>{entry.name}</span>
-                  <span className="fine">{formatCents(entry.priceCents)}</span>
-                </label>
-              ))}
+              {product.frames.map((entry) => {
+                const swatch = frameSwatchUrl(entry.id);
+                return (
+                  <label key={entry.id} className={swatch === undefined ? "choice" : "choice choice-with-swatch"}>
+                    <input
+                      type="radio"
+                      name="frame"
+                      value={entry.id}
+                      checked={frame === entry.id}
+                      onChange={() => {
+                        setFrame(entry.id);
+                        clearMessages();
+                      }}
+                    />
+                    {swatch === undefined ? null : <img className="choice-swatch" src={swatch} alt="" />}
+                    <span>{entry.name}</span>
+                    <span className="fine">{formatCents(entry.priceCents)}</span>
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
           <label className="field">
