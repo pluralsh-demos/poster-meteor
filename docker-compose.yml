@@ -29,4 +29,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["sh", "-c", "node apps/api/dist/migrate.js && node apps/api/dist/seed.js && exec node apps/api/dist/index.js"]
+    command:
+      - sh
+      - -c
+      - |
+        if node --input-type=module -e 'import net from "node:net"; const url = new URL(process.env.DATABASE_URL ?? ""); const socket = net.connect({ host: url.hostname, port: Number(url.port || 5432) }); const done = (code) => { socket.destroy(); process.exit(code); }; socket.setTimeout(2000); socket.on("connect", () => done(0)); socket.on("timeout", () => done(2)); socket.on("error", () => done(2));'; then
+          node apps/api/dist/migrate.js && node apps/api/dist/seed.js || exit 1
+        else
+          echo "postgres is not running; serving the catalog without orders" >&2
+        fi
+        exec node apps/api/dist/index.js
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api

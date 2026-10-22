@@ -10,7 +10,13 @@ Product data is the compiled module in `apps/api/src/catalog.ts`, loaded at star
 docker compose up --build
 ```
 
-The API is at `http://localhost:3000`. Compose starts Postgres, waits until it is healthy, then runs migrations and the order seed before the server listens.
+The storefront is at `http://localhost:8080`. The API is at `http://localhost:3000`. Compose starts Postgres, waits until it is healthy, then runs migrations and the order seed before the API listens. nginx serves the built SPA and proxies `/api/` to the API.
+
+```bash
+docker compose up api web --no-deps --build
+```
+
+That starts the API and the storefront without Postgres. The API listens without connecting, and catalog routes still respond.
 
 ```bash
 npm test
@@ -28,14 +34,14 @@ npm run seed
 
 When `DATABASE_URL` is set, the process opens a `pg` pool. `POOL_MAX` defaults to 8. With it unset, catalog, health, and metrics still respond. Order routes return 503.
 
-The checkout page is a separate Vite app. Compose does not start it:
+Vite stays available for local UI work. It proxies `/api` to `http://127.0.0.1:3000`.
 
 ```bash
 npm install --prefix apps/web
 npm run dev --prefix apps/web
 ```
 
-Open `http://localhost:5173/checkout`. Vite proxies `/api` to `http://127.0.0.1:3000`.
+Open `http://localhost:5173`.
 
 ## Catalog
 
