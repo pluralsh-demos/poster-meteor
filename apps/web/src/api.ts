@@ -1,3 +1,5 @@
+import { parseCatalog, parseProductDetail, type Catalog, type CatalogProductDetail } from "./catalog";
+
 export type OrderItem = {
   sku: string;
   size: string;
@@ -88,6 +90,39 @@ export async function createOrder(order: CreateOrderRequest): Promise<Order> {
   const body: unknown = await response.json();
   if (!isOrder(body)) throw new ApiError(response.status, "We couldn't place your order");
   return body;
+}
+
+export function isAbortError(cause: unknown): boolean {
+  return cause instanceof Error && cause.name === "AbortError";
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+}
+
+export async function fetchCatalog(signal?: AbortSignal): Promise<Catalog> {
+  const response = await fetch("/api/products", {
+    ...(signal === undefined ? {} : { signal }),
+  });
+  if (!response.ok) throw new ApiError(response.status, "The catalog did not load.");
+  const catalog = parseCatalog(await readJson(response));
+  if (catalog === undefined) throw new ApiError(response.status, "The catalog did not load.");
+  return catalog;
+}
+
+export async function fetchProduct(sku: string, signal?: AbortSignal): Promise<CatalogProductDetail> {
+  const response = await fetch(`/api/products/${encodeURIComponent(sku)}`, {
+    ...(signal === undefined ? {} : { signal }),
+  });
+  if (response.status === 404) throw new ApiError(404, "We couldn't find that poster.");
+  if (!response.ok) throw new ApiError(response.status, "The catalog did not load.");
+  const product = parseProductDetail(await readJson(response));
+  if (product === undefined) throw new ApiError(response.status, "The catalog did not load.");
+  return product;
 }
 
 export async function fetchOrder(number: string, signal?: AbortSignal): Promise<Order> {

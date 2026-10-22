@@ -1,21 +1,27 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { CartPage } from "./CartPage";
+import { CartProvider } from "./CartContext";
+import { CatalogPage } from "./CatalogPage";
 import { CheckoutPage } from "./CheckoutPage";
 import { OrderPage } from "./OrderPage";
+import { ProductPage } from "./ProductPage";
+import { SiteHeader } from "./SiteHeader";
 
 export function App() {
   return (
     <BrowserRouter>
-      <div className="app">
-        <header className="site-header">
-          <div className="brand">Poster Meteor</div>
-          <p className="demo-label">Demo store</p>
-        </header>
-        <Routes>
-          <Route path="/" element={<Navigate to="/checkout" replace />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/orders/:number" element={<OrderPage />} />
-        </Routes>
-      </div>
+      <CartProvider>
+        <div className="app">
+          <SiteHeader />
+          <Routes>
+            <Route path="/" element={<CatalogPage />} />
+            <Route path="/products/:sku" element={<ProductPage />} />
+            <Route path="/cart" element={<CartPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/orders/:number" element={<OrderPage />} />
+          </Routes>
+        </div>
+      </CartProvider>
     </BrowserRouter>
   );
 }
