@@ -6,6 +6,7 @@ export type ApiMetrics = {
   registry: Registry;
   httpRequestsTotal: Counter<"route" | "status">;
   httpRequestDurationSeconds: Histogram<"route">;
+  transactionsTotal: Counter<"result">;
   dbErrorsTotal: Counter<"sqlstate">;
 };
 
@@ -28,7 +29,7 @@ export function createMetrics(getPool: () => PoolLike | undefined): ApiMetrics {
     registers: [registry],
   });
 
-  new Counter({
+  const transactionsTotal = new Counter({
     name: "transactions_total",
     help: "Checkout transactions by result",
     labelNames: ["result"] as const,
@@ -75,6 +76,7 @@ export function createMetrics(getPool: () => PoolLike | undefined): ApiMetrics {
     registry,
     httpRequestsTotal,
     httpRequestDurationSeconds,
+    transactionsTotal,
     dbErrorsTotal,
   };
 }
