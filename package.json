@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc -p apps/api/tsconfig.json",
     "start": "node apps/api/dist/index.js",
+    "migrate": "node apps/api/dist/migrate.js",
     "test": "vitest run"
   },
   "dependencies": {
