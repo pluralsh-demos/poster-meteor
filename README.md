@@ -1,8 +1,8 @@
 # Poster Meteor
 
-Store API and a local checkout page for the Poster Meteor demo. TypeScript, Fastify 5, Node 22. The API listens on `0.0.0.0:3000`.
+Demo storefront and store API for Poster Meteor. TypeScript, Fastify 5, Node 22. The API listens on `0.0.0.0:3000`. The storefront is a React app.
 
-Product data is the compiled module in `apps/api/src/catalog.ts`, loaded at startup. Catalog routes read that module. Postgres is started by Compose for checkout; browse stays up if the pool errors.
+Product data is the compiled module in `apps/api/src/catalog.ts`, loaded at startup. Catalog routes read that module. The storefront loads the same data with `GET /api/products`. Postgres is started by Compose for checkout; browse stays up if the pool errors.
 
 ## Run
 
@@ -10,7 +10,7 @@ Product data is the compiled module in `apps/api/src/catalog.ts`, loaded at star
 docker compose up --build
 ```
 
-The storefront is at `http://localhost:8080`. The API is at `http://localhost:3000`. Compose starts Postgres, waits until it is healthy, then runs migrations and the order seed before the API listens. nginx serves the built SPA and proxies `/api/` to the API.
+The storefront is at `http://localhost:8080`. The API is at `http://localhost:3000`. Compose starts Postgres, waits until it is healthy, then runs migrations and the order seed before the API listens. The `web` service builds `apps/web/Dockerfile` (Vite, then nginx). nginx serves the SPA with `try_files` and proxies `/api/` to `http://api:3000`. The API image remains the repo `Dockerfile`.
 
 ```bash
 docker compose up api web --no-deps --build
@@ -114,13 +114,31 @@ Money columns are integer cents. `order_number_seq` starts at 10000.
 
 The seed writes `PM-10000` through `PM-11999` when `orders` is empty, all with status `received` and `created_at` spread over the past year. SKU weights are Perseid 20, Leonid 15, Halley 15, Star Map 20, Name in the Stars 20, and Nebula 10. Sizes and frames come from the catalog. The unit price is size cents plus the flat frame price. The sequence is left so the next checkout is `PM-12000`.
 
+## Storefront
+
+`apps/web` is the React storefront. Every page shows the Poster Meteor wordmark, which links to `/`, a Demo store label, and a cart link with the line count.
+
+| Path | Page |
+| --- | --- |
+| `/` | Catalog grid from `GET /api/products`. Each card shows `thumb.webp`, the name, and the A3 unframed price, and links to the product page. |
+| `/products/:sku` | Size (A3, A2, A1), frame (None, Black Oak, White Ash), quantity (1–10), and custom text when that poster allows it. The price is size cents plus frame cents, times quantity. |
+| `/cart` | Lines, quantity, remove, and subtotal, with a link to `/checkout`. |
+| `/checkout` | Shipping and payment. See below. |
+| `/orders/:number` | Confirmation and status. |
+
+Add to cart writes `localStorage["poster-meteor.cart"]`. A line is `{ sku, size, frame, customText?, quantity }`. A line merges with one that matches sku, size, frame, and trimmed custom text, and the merged quantity stays within 1–10. Custom text is only for `PM-STARMAP` and `PM-NAMESTARS`: trimmed, 1–60 characters. The cart is still there after a reload.
+
+The product preview uses the WebP copied for that SKU. A3, A2, and A1 share the same image, and size scales it. The frame is a CSS border. Wood swatches sit beside the frame choices. `PM-STARMAP` and `PM-NAMESTARS` show `hero.webp` until the text field has a value, then `hero-blank.webp` with that text overlaid. `lifestyle.webp` ships with each poster for later pages.
+
+Images live in `apps/web/public/posters`, so the nginx image includes them. The folder name is the SKU in lowercase (`/posters/pm-perseid/thumb.webp`). Swatches are `/posters/swatches/black-oak.webp` and `/posters/swatches/white-ash.webp`. The catalog response has no image field.
+
+The catalog, product, and cart pages render only what `GET /api/products` and `GET /api/products/:sku` return. When that request fails, they say the catalog did not load. An unknown SKU says the poster could not be found. Those pages keep working with Postgres stopped, because catalog routes never query it.
+
 ## Checkout page
 
-`apps/web` is a React app with a visible Demo store label.
+`/checkout` reads the same `poster-meteor.cart` value. An empty cart still shows one editable line, defaulting to `PM-PERSEID` / `A3` / `none`.
 
-- `/` redirects to `/checkout`
-- `/checkout` reads `localStorage["poster-meteor.cart"]` as `{ sku, size, frame, customText?, quantity }[]`. An empty cart still shows one editable line, defaulting to `PM-PERSEID` / `A3` / `none`
-- `/orders/:number` is both the confirmation and the status page. It shows the order number and status `received`
+`/orders/:number` is both the confirmation and the status page. It shows the order number and status `received`.
 
 Shipping and payment fields submit to `POST /api/orders`. The page shows the API's status value and does not add later fulfillment steps.
 
