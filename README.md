@@ -134,3 +134,39 @@ Shipping and payment fields submit to `POST /api/orders`. The page shows the API
 Build labels come from `PACK`, `VERSION`, and `GIT_SHA` (defaults `poster-meteor`, `dev`, `unknown`). The image passes `GIT_SHA` as a build arg.
 
 Every log line includes `pack` (`poster-meteor`), `service` (`api`), `route` (the route template, such as `/api/products/:sku`), and `ref` (the order number on create and on `GET /api/orders/:number`, otherwise empty). Database errors add `sqlstate`. Cookie values, the `Authorization` header, and `payment` are redacted.
+
+## Deploy
+
+The Helm chart in `deploy/chart` is named `poster-meteor`. A Backlot slot points a ServiceDeployment at that chart and at `deploy/values.yaml`. Each slot has its own namespace, so the workloads keep short names. `deploy/chart/values.yaml` repeats the same defaults, so `helm template` works with no extra file. Release automation patches `deploy/values.yaml` only.
+
+```bash
+helm lint deploy/chart -f deploy/values.yaml
+helm template poster-meteor deploy/chart -f deploy/values.yaml
+```
+
+With the defaults, the rendered host is `poster-meteor-01.backlot.plural.sh`. The slot ServiceDeployment supplies `slot.number` and `domain`. `pack.hostnamePrefix` stays `poster-meteor`.
+
+| Resource | Name | What it does |
+| --- | --- | --- |
+| CNPG `Cluster` | `poster-meteor` | One Postgres 16 instance, database `poster_meteor`, owner `poster`. `max_connections` is `postgres.maxConnections` (`"60"`). Storage is `postgres.storage.size` (`10Gi`). |
+| Secret | `poster-meteor-app` | Written by the operator. The `uri` key is `DATABASE_URL`. |
+| Deployment, Service | `api` | Port 3000. Image `ghcr.io/pluralsh/poster-meteor:<api.image.tag>`. |
+| HorizontalPodAutoscaler | `api` | `autoscaling/v2`. Minimum and maximum are `api.autoscaling.minReplicas` and `maxReplicas` (3 and 6). CPU target is 70% of the request. |
+| Deployment, Service | `web` | Port 8080. Image `ghcr.io/pluralsh/poster-meteor-web:<web.image.tag>`. |
+| Ingress | `poster-meteor` | Class `nginx`. `/api` goes to `api`, `/` goes to `web`. TLS secret `backlot-wildcard-tls`. |
+| Job | `poster-meteor-migrate` | `pre-install,pre-upgrade` hook. |
+| Job | `poster-meteor-seed` | `post-install,post-upgrade` hook. |
+
+This release renders `api` and `web`. The `worker` keys in `deploy/values.yaml` stay there so a later overlay can set image, replica count, pool size, render concurrency, and resources. `worker.image.repository` matches the API image.
+
+The API container gets `DATABASE_URL`, `POOL_MAX` from `api.db.poolMax` (8), and `PACK` from `pack.hostnamePrefix`. Liveness is `/healthz` and readiness is `/readyz`. The Deployment replica count is `api.autoscaling.minReplicas`, and the pod requests 100m CPU and 256Mi memory so the HPA can compute utilization. Raising `api.autoscaling.minReplicas` in `deploy/values.yaml` raises both the Deployment and the HPA minimum. `api.image.tag` stays `dev` until CI publishes a release tag. `GIT_SHA` stays a build arg on the API image.
+
+`Dockerfile.web` builds the storefront from `apps/web` and its own lockfile, then serves `dist` (including `public/posters`) with unprivileged nginx on port 8080. `try_files` falls back to `index.html` for `/`, `/products/:sku`, `/cart`, `/checkout`, and `/orders/:number`. Every response sets `X-Robots-Tag: noindex`.
+
+Install needs the CloudNativePG operator in the cluster. Build `Dockerfile` and `Dockerfile.web`, then `helm upgrade --install`.
+
+On a fresh install the Cluster and `poster-meteor-app` do not exist when the pre-install hook runs. `poster-meteor-migrate` exits 0 when `DATABASE_URL` is unset. When the secret is present, the hook waits for Postgres and runs `node apps/api/dist/migrate.js` before the API rolls. The `api` initContainer waits for the same secret and runs that migrate command before the process listens. `migrate` takes an advisory lock, so the hook and the initContainer can both run it.
+
+`poster-meteor-seed` runs after install and upgrade. It waits for Postgres, runs migrate, then `node apps/api/dist/seed.js`. Seed inserts the 2000 historical orders only when `orders` is empty, so a second install does not insert them again.
+
+Hook Jobs use `helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded`. See `docs/runbook.md` for the names a slot operator uses.
