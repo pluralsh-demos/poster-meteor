@@ -82,3 +82,31 @@ app.kubernetes.io/component: {{ .name }}
 app.kubernetes.io/name: {{ .name }}
 app.kubernetes.io/instance: {{ .root.Release.Name }}
 {{- end }}
+
+{{/*
+Shell for migrate and seed. Waits until Postgres accepts a connection, then
+runs .steps. The pre-install migrate hook sets skipIfUnset because the CNPG
+app secret does not exist until the Cluster manifest is applied.
+*/}}
+{{- define "poster-meteor.db.script" -}}
+set -eu
+{{- if .skipIfUnset }}
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "DATABASE_URL is unset; skipping"
+  exit 0
+fi
+{{- end }}
+i=0
+until node --input-type=module -e 'import { createRequire } from "node:module"; const { Pool } = createRequire("/app/package.json")("pg"); const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, connectionTimeoutMillis: 2000 }); try { const client = await pool.connect(); await client.query("SELECT 1"); client.release(); } finally { await pool.end(); }'; do
+  i=$((i + 1))
+  if [ "$i" -ge 150 ]; then
+    echo "postgres did not become ready" >&2
+    exit 1
+  fi
+  echo "waiting for postgres ($i)"
+  sleep 2
+done
+{{- range .steps }}
+{{ . }}
+{{- end }}
+{{- end }}
