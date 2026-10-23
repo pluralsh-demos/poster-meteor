@@ -18,6 +18,25 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+      initContainers:
+        - name: migrate
+          image: {{ include "poster-meteor.api.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+{{ include "poster-meteor.db.script" (dict "steps" (list "exec node apps/api/dist/migrate.js")) | indent 14 }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "poster-meteor.databaseSecret" . }}
+                  key: uri
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
       containers:
         - name: api
           image: {{ include "poster-meteor.api.image" . | quote }}
