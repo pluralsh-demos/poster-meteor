@@ -64,3 +64,21 @@ app.kubernetes.io/part-of: poster-meteor
 app.kubernetes.io/name: {{ include "poster-meteor.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Workload labels. api and web keep distinct names so their selectors do not overlap.
+*/}}
+{{- define "poster-meteor.workloadLabels" -}}
+helm.sh/chart: {{ include "poster-meteor.chart" .root }}
+app.kubernetes.io/name: {{ .name }}
+app.kubernetes.io/instance: {{ .root.Release.Name }}
+app.kubernetes.io/version: {{ .root.Chart.AppVersion | quote }}
+app.kubernetes.io/managed-by: {{ .root.Release.Service }}
+app.kubernetes.io/part-of: poster-meteor
+app.kubernetes.io/component: {{ .name }}
+{{- end }}
+
+{{- define "poster-meteor.workloadSelectorLabels" -}}
+app.kubernetes.io/name: {{ .name }}
+app.kubernetes.io/instance: {{ .root.Release.Name }}
+{{- end }}

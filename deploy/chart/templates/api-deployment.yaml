@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    {{- include "poster-meteor.workloadLabels" (dict "root" . "name" "api") | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.autoscaling.minReplicas }}
+  selector:
+    matchLabels:
+      {{- include "poster-meteor.workloadSelectorLabels" (dict "root" . "name" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "poster-meteor.workloadLabels" (dict "root" . "name" "api") | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: api
+          image: {{ include "poster-meteor.api.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "poster-meteor.databaseSecret" . }}
+                  key: uri
+            - name: POOL_MAX
+              value: {{ .Values.api.db.poolMax | quote }}
+            - name: PACK
+              value: {{ .Values.pack.hostnamePrefix | quote }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
