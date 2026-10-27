@@ -174,9 +174,9 @@ With the defaults, the rendered host is `poster-meteor-01.backlot.plural.sh`. Th
 | --- | --- | --- |
 | CNPG `Cluster` | `poster-meteor` | One Postgres 16 instance, database `poster_meteor`, owner `poster`. `max_connections` is `postgres.maxConnections` (`"60"`). Storage is `postgres.storage.size` (`10Gi`). |
 | Secret | `poster-meteor-app` | Written by the operator. The `uri` key is `DATABASE_URL`. |
-| Deployment, Service | `api` | Port 3000. Image `ghcr.io/pluralsh/poster-meteor:<api.image.tag>`. |
+| Deployment, Service | `api` | Port 3000. Image `ghcr.io/pluralsh-demos/poster-meteor:<api.image.tag>`. |
 | HorizontalPodAutoscaler | `api` | `autoscaling/v2`. Minimum and maximum are `api.autoscaling.minReplicas` and `maxReplicas` (3 and 6). CPU target is 70% of the request. |
-| Deployment, Service | `web` | Port 8080. Image `ghcr.io/pluralsh/poster-meteor-web:<web.image.tag>`. |
+| Deployment, Service | `web` | Port 8080. Image `ghcr.io/pluralsh-demos/poster-meteor-web:<web.image.tag>`. |
 | Ingress | `poster-meteor` | Class `nginx`. `/api` goes to `api`, `/` goes to `web`. TLS secret `backlot-wildcard-tls`. |
 | Job | `poster-meteor-migrate` | `pre-install,pre-upgrade` hook. |
 | Job | `poster-meteor-seed` | `post-install,post-upgrade` hook. |
