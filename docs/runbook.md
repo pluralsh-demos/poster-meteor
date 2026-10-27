@@ -23,7 +23,7 @@ Postgres is one instance, version 16, database `poster_meteor`, owner `poster`. 
 
 ## Install and upgrade
 
-The cluster must already run the CloudNativePG operator. Images are `ghcr.io/pluralsh/poster-meteor` (API, from `Dockerfile`) and `ghcr.io/pluralsh/poster-meteor-web` (storefront, from `Dockerfile.web`). Tags come from `api.image.tag` and `web.image.tag`. Both default to `dev`.
+The cluster must already run the CloudNativePG operator. Images are `ghcr.io/pluralsh-demos/poster-meteor` (API, from `Dockerfile`) and `ghcr.io/pluralsh-demos/poster-meteor-web` (storefront, from `Dockerfile.web`). Tags come from `api.image.tag` and `web.image.tag`. Both default to `dev`.
 
 `poster-meteor-migrate` is a `pre-install,pre-upgrade` hook. On the first install the Cluster manifest has not been applied, so `poster-meteor-app` is missing and the hook exits 0. On upgrade the secret exists: the hook waits until Postgres accepts a connection, then runs `node apps/api/dist/migrate.js` before API pods roll. A new image with no new SQL file still succeeds.
 
