@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/**"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+      - "Dockerfile.web"
+      - "deploy/web/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: tag
+        run: echo "tag=$(./scripts/image-tag.sh)" >> "$GITHUB_OUTPUT"
+
+      - id: images
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import re
+          from pathlib import Path
+
+          text = Path("deploy/values.yaml").read_text()
+
+          def image(section):
+              match = re.search(
+                  rf"(?ms)^{section}:\n(.*?)(?=^[A-Za-z])",
+                  text,
+              )
+              if not match:
+                  raise SystemExit(f"missing {section} section in deploy/values.yaml")
+              body = match.group(1)
+              repo = re.search(r"(?m)^    repository: (\S+)\s*$", body)
+              tag = re.search(r"(?m)^    tag: (\S+)\s*$", body)
+              if not repo or not tag:
+                  raise SystemExit(f"missing {section}.image repository or tag")
+              return repo.group(1), tag.group(1)
+
+          api, _api_tag = image("api")
+          web, _web_tag = image("web")
+          worker, _worker_tag = image("worker")
+          if worker != api:
+              raise SystemExit(
+                  f"worker.image.repository ({worker}) must match api.image.repository ({api})"
+              )
+          parts = api.split("/")
+          if len(parts) != 3 or parts[0] != "ghcr.io":
+              raise SystemExit(f"api image must be ghcr.io/<owner>/<name>, got {api}")
+          print(f"api={api}")
+          print(f"web={web}")
+          print(f"registry_owner={parts[1]}")
+          PY
+
+      # GITHUB_TOKEN can push packages owned by this repository's owner.
+      # A copied tree whose values point at another owner uses GHCR_TOKEN.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ steps.images.outputs.registry_owner == github.repository_owner && secrets.GITHUB_TOKEN || secrets.GHCR_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Publish API image
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          IMAGE: ${{ steps.images.outputs.api }}
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          if docker buildx imagetools inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+            echo "Reusing ${IMAGE}:${TAG}"
+          else
+            docker buildx build \
+              --file Dockerfile \
+              --build-arg "GIT_SHA=${GIT_SHA}" \
+              --tag "${IMAGE}:${TAG}" \
+              --provenance=false \
+              --sbom=false \
+              --push \
+              .
+          fi
+
+      - name: Publish web image
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          IMAGE: ${{ steps.images.outputs.web }}
+        run: |
+          if docker buildx imagetools inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+            echo "Reusing ${IMAGE}:${TAG}"
+          else
+            docker buildx build \
+              --file Dockerfile.web \
+              --tag "${IMAGE}:${TAG}" \
+              --provenance=false \
+              --sbom=false \
+              --push \
+              .
+          fi
+
+      - name: Bump deploy/values.yaml
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("deploy/values.yaml")
+          tag = os.environ["TAG"]
+          sections = {"api", "web", "worker"}
+          current = None
+          found = set()
+          lines = []
+          for line in path.read_text().splitlines(keepends=True):
+              section = re.match(r"^([A-Za-z0-9_]+):", line)
+              if section:
+                  current = section.group(1)
+              if current in sections and re.match(r"^    tag: \S+\s*$", line):
+                  newline = "\n" if line.endswith("\n") else ""
+                  line = f"    tag: {tag}{newline}"
+                  found.add(current)
+              lines.append(line)
+          missing = sections - found
+          if missing:
+              raise SystemExit(f"did not find image tags for {', '.join(sorted(missing))}")
+          path.write_text("".join(lines))
+          PY
+
+          if git diff --quiet -- deploy/values.yaml; then
+            echo "api.image.tag, web.image.tag, and worker.image.tag already match ${TAG}"
+            exit 0
+          fi
+
+          git add deploy/values.yaml
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Record the content-hash image tag so the slot rolls out this source tree."
+          git push origin "HEAD:${{ github.ref_name }}"
