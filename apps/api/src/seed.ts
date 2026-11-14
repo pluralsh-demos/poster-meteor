@@ -5,17 +5,11 @@ import { frames, getProduct, sizes, type Sku } from "./catalog.js";
 
 const SEED_LOCK = "poster-meteor-seed";
 
-/** Historical orders inserted when `orders` is empty. */
+/** Historical orders. A run skips them only when seeded orders are already present. */
 export const SEED_ORDER_COUNT = 2000;
 
 /** First seeded order number is `PM-10000`; the last is `PM-11999`. */
 export const SEED_FIRST_NUMBER = 10_000;
-
-/**
- * `setval` target. `is_called` stays true, so the next `nextval` is 12000
- * and the next checkout number is `PM-12000`.
- */
-export const SEED_SEQUENCE_VALUE = SEED_FIRST_NUMBER + SEED_ORDER_COUNT - 1;
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -268,6 +262,18 @@ export function buildSeedOrders(now: Date): SeedOrder[] {
   return orders;
 }
 
+/**
+ * Seeded rows occupy `PM-10000` through `PM-11999` and `buyer.*@example.com`.
+ * A live checkout on the old sequence can share that number range, so the
+ * email match keeps it from looking like seed data.
+ */
+const seededOrdersCountSql = `
+  SELECT count(*)::int AS count
+  FROM orders
+  WHERE number ~ '^PM-1[01][0-9]{3}$'
+    AND email LIKE 'buyer.%@example.com'
+`;
+
 function seedParameters(orders: readonly SeedOrder[]): unknown[] {
   return [
     orders.map((order) => order.number),
@@ -284,7 +290,12 @@ function seedParameters(orders: readonly SeedOrder[]): unknown[] {
   ];
 }
 
-/** Inserts 2000 orders when `orders` is empty. A later run inserts nothing. */
+/**
+ * Inserts 2000 orders unless seeded orders already exist (`PM-10000` through
+ * `PM-11999`, email `buyer.*@example.com`). Live orders do not skip the seed.
+ * A later run inserts nothing. The migration owns `order_number_seq` and
+ * starts it at 12000.
+ */
 export async function seedOrders(
   client: PoolClient,
   options: { now?: Date } = {},
@@ -293,9 +304,7 @@ export async function seedOrders(
   await client.query("BEGIN");
   try {
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [SEED_LOCK]);
-    const existing = await client.query<{ count: string | number }>(
-      "SELECT count(*)::int AS count FROM orders",
-    );
+    const existing = await client.query<{ count: string | number }>(seededOrdersCountSql);
     const count = Number(existing.rows[0]?.count ?? 0);
     if (count > 0) {
       await client.query("COMMIT");
@@ -304,7 +313,6 @@ export async function seedOrders(
 
     const orders = buildSeedOrders(now);
     await client.query(insertSql, seedParameters(orders));
-    await client.query("SELECT setval('order_number_seq', $1)", [SEED_SEQUENCE_VALUE]);
     await client.query("COMMIT");
     return { inserted: orders.length };
   } catch (error) {
@@ -331,7 +339,7 @@ async function main(): Promise<void> {
     try {
       const { inserted } = await seedOrders(client);
       if (inserted === 0) {
-        console.log("seed skipped; orders already present");
+        console.log("seed orders already present");
       } else {
         console.log(`seeded ${inserted} orders`);
       }
