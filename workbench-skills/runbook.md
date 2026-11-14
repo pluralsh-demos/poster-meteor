@@ -65,7 +65,7 @@ Migrations are `apps/api/migrations/*.sql`. `node apps/api/dist/migrate.js` appl
 
 `poster-meteor-migrate-<api.image.tag>` is a `pre-install,pre-upgrade` hook. The tag is `api.image.tag`, lowercased and limited to DNS-1123, so a new image is a new Job. On a first install, before `poster-meteor-app` exists, the hook exits 0. When the secret exists it waits until Postgres accepts a connection, then migrates, before API pods roll. The `api` initContainer runs the same command, and the server does not listen until that container exits. The lock lets the hook and the initContainer overlap.
 
-`poster-meteor-seed-<api.image.tag>` is a `post-install,post-upgrade` hook, named the same way. It waits for Postgres, migrates, then runs `node apps/api/dist/seed.js`. Seed inserts 2000 historical orders only when `orders` is empty. A later upgrade leaves those rows in place.
+`poster-meteor-seed-<api.image.tag>` is a `post-install,post-upgrade` hook, named the same way. It waits for Postgres, migrates, then runs `node apps/api/dist/seed.js`. Seed inserts 2000 historical orders (`PM-10000` through `PM-11999`) and skips only when those seeded orders already exist. `order_number_seq` starts at 12000, so the first checkout is `PM-12000`. A later upgrade leaves those rows in place.
 
 CronJob `poster-meteor-seed` stays suspended. It uses the same pod template as the seed hook. A reset creates a Job from it after the database is wiped. The schedule does not run it.
 
@@ -105,6 +105,6 @@ To undo a release, open a pull request that sets `api.image.tag`, `web.image.tag
 
 This is safe when the release applied no new SQL file. Compare `apps/api/migrations` in the two commits with the filenames in `schema_migrations`. If the newer commit added a file and that filename is already recorded, the schema is ahead of the older image. Reverting the tags is the wrong fix. Ship a forward change instead.
 
-When no new file was applied, the previous tag restores the previous API and storefront. The migrate hook runs again and skips every file already recorded. The seed hook does not insert orders that are already there.
+When no new file was applied, the previous tag restores the previous API and storefront. The migrate hook runs again and skips every file already recorded. The seed hook skips only when seeded orders already exist.
 
 Merging that pull request does not start an image build. The values files are not inputs to `release.yml`.

@@ -30,7 +30,7 @@ npm run migrate
 npm run seed
 ```
 
-`migrate` applies `apps/api/migrations/*.sql` in filename order and records each file in `schema_migrations`. A later run skips files already recorded. `seed` inserts 2000 historical orders only when `orders` is empty, then exits. A later run inserts nothing.
+`migrate` applies `apps/api/migrations/*.sql` in filename order and records each file in `schema_migrations`. A later run skips files already recorded. `seed` inserts 2000 historical orders, then exits. It skips only when seeded orders already exist. `order_number_seq` starts at 12000.
 
 When `DATABASE_URL` is set, the process opens a `pg` pool. `POOL_MAX` defaults to 8. With it unset, catalog, health, and metrics still respond. Order routes return 503.
 
@@ -94,7 +94,7 @@ A successful create returns 201:
 }
 ```
 
-`GET /api/orders/:number` returns the same shape. Numbers come from `order_number_seq`, which starts at 10000 (`PM-10000`). After the seed, the next checkout is `PM-12000`.
+`GET /api/orders/:number` returns the same shape. Numbers come from `order_number_seq`, which starts at 12000, so the first checkout is `PM-12000`.
 
 The order and its items are inserted in one transaction. A committed order increments `transactions_total{result="success"}`. A database failure after validation returns 500 with `We couldn't place your order` and omits the SQL error. That increments `transactions_total{result="error"}` and `db_errors_total{sqlstate}`. The error log includes `sqlstate` and the Postgres message. The create success log and `GET /api/orders/:number` set `ref` to the order number.
 
@@ -110,9 +110,9 @@ The order and its items are inserted in one transaction. A committed order incre
 | `order_items` | `id`, `order_id`, `sku`, `size`, `frame`, `custom_text`, `unit_price` |
 | `schema_migrations` | `filename` (primary key), `applied_at` |
 
-Money columns are integer cents. `order_number_seq` starts at 10000.
+Money columns are integer cents. `order_number_seq` starts at 12000.
 
-The seed writes `PM-10000` through `PM-11999` when `orders` is empty, all with status `received` and `created_at` spread over the past year. SKU weights are Perseid 20, Leonid 15, Halley 15, Star Map 20, Name in the Stars 20, and Nebula 10. Sizes and frames come from the catalog. The unit price is size cents plus the flat frame price. The sequence is left so the next checkout is `PM-12000`.
+The seed writes `PM-10000` through `PM-11999` and skips only when those seeded orders already exist. Each row has status `received` and `created_at` spread over the past year. SKU weights are Perseid 20, Leonid 15, Halley 15, Star Map 20, Name in the Stars 20, and Nebula 10. Sizes and frames come from the catalog. The unit price is size cents plus the flat frame price. Because the sequence starts at 12000, the next checkout is `PM-12000`.
 
 ## Storefront
 
@@ -192,7 +192,7 @@ Install needs the CloudNativePG operator in the cluster. Build `Dockerfile` and 
 
 On a fresh install the Cluster and `poster-meteor-app` do not exist when the pre-install hook runs. `poster-meteor-migrate-<api.image.tag>` exits 0 when `DATABASE_URL` is unset. When the secret is present, the hook waits for Postgres and runs `node apps/api/dist/migrate.js` before the API rolls. The `api` initContainer waits for the same secret and runs that migrate command before the process listens. `migrate` takes an advisory lock, so the hook and the initContainer can both run it.
 
-`poster-meteor-seed-<api.image.tag>` runs after install and upgrade. It waits for Postgres, runs migrate, then `node apps/api/dist/seed.js`. Seed inserts the 2000 historical orders only when `orders` is empty, so a second install does not insert them again. CronJob `poster-meteor-seed` stays suspended and carries that same pod template. A reset creates a Job from the CronJob after the database is wiped. The schedule does not run it.
+`poster-meteor-seed-<api.image.tag>` runs after install and upgrade. It waits for Postgres, runs migrate, then `node apps/api/dist/seed.js`. Seed inserts the 2000 historical orders and skips only when seeded orders already exist, so a second install does not insert them again. CronJob `poster-meteor-seed` stays suspended and carries that same pod template. A reset creates a Job from the CronJob after the database is wiped. The schedule does not run it.
 
 Hook Jobs use `helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded`. See `workbench-skills/runbook.md` for the names a slot operator uses.
 
